@@ -27,7 +27,7 @@ ALUFN  | Operation | Type    | Description
 
 Electronic Design
 =================
-![Alt text](https://github.com/Jiankun0830/Doodle-Jumper/master/Electronic_design.jpeg)
+![Alt text](https://github.com/Jiankun0830/Doodle-Jumper/raw/master/Electronic_design.jpeg)
 
 
 
