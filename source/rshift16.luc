@@ -1,0 +1,72 @@
+// This file describes a right shifter in the shifter unit of a 16-bit ALU.
+
+module rshift16 (
+    input a[16],        // ALU `a` input; bits to be shifted
+    input b[5],         // lowest 5 bits of ALU `b` input; number of bits to shift by
+    input arithmetic,   // whether to do arithmetic right shift rather than logical right shift
+    input rotate,       // whether to rotate rather than shift
+    output shift[16]    // left shifter output
+  ) {
+
+  // intermediate values of shifted input
+  sig after16[16];
+  sig after8[16];
+  sig after4[16];
+  sig after2[16];
+  // bit to fill in when doing arithmetic shift
+  sig sign_fill;
+  // bits to fill in when shifting
+  sig fill8[8];
+  sig fill4[4];
+  sig fill2[2];
+  sig fill1[1];
+  
+  always {
+    // determine what value to fill in if arithmetic mode
+    case(arithmetic) {
+      1: sign_fill = a[15];
+      default: sign_fill = 0;
+    }
+    // shift by 16 bits
+    case({b[4], rotate}) {
+      {1, 0}: after16 = 16x{sign_fill};
+      default: after16 = a;
+    }
+    // shift by 8 bits
+    case(rotate) {
+      1: fill8 = after16[0+:8];
+      default: fill8 = 8x{sign_fill};
+    }
+    case(b[3]) {
+      1: after8 = c{fill8, after16[15:8]};
+      default: after8 = after16;
+    }
+    // shift by 4 bits
+    case(rotate) {
+      1: fill4 = after8[0+:4];
+      default: fill4 = 4x{sign_fill};
+    }
+    case(b[2]) {
+      1: after4 = c{fill4, after8[15:4]};
+      default: after4 = after8;
+    }
+    // shift by 2 bits
+    case(rotate) {
+      1: fill2 = after4[0+:2];
+      default: fill2 = 2x{sign_fill};
+    }
+    case(b[1]) {
+      1: after2 = c{fill2, after4[15:2]};
+      default: after2 = after4;
+    }
+    // shift by 1 bit
+    case(rotate) {
+      1: fill1 = after2[0+:1];
+      default: fill1 = 1x{sign_fill};
+    }
+    case(b[0]) {
+      1: shift = c{fill1, after2[15:1]};
+      default: shift = after2;
+    }
+  }
+}

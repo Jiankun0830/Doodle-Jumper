@@ -1,0 +1,149 @@
+/*
+   This file describes the memory used in the data path for the game.
+   The memory consists of:
+    - control registers, containing data affecting the functioning of the data path itself
+    - display registers, containing data to be wired to the display module
+    - general purpose registers
+    - a pseudo-random number generator, implemented as a linear feedback shift register (LFSR)
+    - a player input signal wired in from the game controller, so that it can be exposed for reading by the ALU
+    - a ROM containing constants for use in ALU calculations
+   The former 3 are writeable, and the latter 3 are read-only.
+*/
+module memory (
+    input clk,  // clock
+    input rst,  // reset
+    // read ports
+    input ra1[6],      // read address 1
+    input ra2[6],      // read address 2
+    output rd1[16],    // read data 1
+    output rd2[16],    // read data 2
+    // write port
+    input wa[6],       // write address
+    input wd[16],      // write data
+    // input register: written by game controller, reset every tick after ALU completes execution
+    input controller_input[16],  // player input from the controller
+    // control signals
+    output game_running,         // whether content of the `game_running_reg` is non-zero
+    output tick_period[16],      // the period of a game tick, in terms of 65536 clock cycles
+    // display port
+    output question_nums[3][16], // the 3 numbers that specify a question
+    output terrain[4][32],       // the game terrain
+    output doodle[6][16],        // the position-offset Doodle sprite
+    output score[16]             // current score
+  ) {
+  
+  // ROM storing constants
+  const CONSTANTS = $reverse({
+    16d0,        // ZERO
+    16d1,        // ONE
+    16d3,        // THREE
+    16d9,        // NINE
+    16d15,       // FIFTEEN
+    16d100,      // HUNDRED
+    16h8000,     // SHIFT_MASK
+    16h01ff,     // PRNG_MASK
+    16hfc00,     // COLLISION_MASK
+    16h0013,     // DOODLE_SPRITE5
+    16h0022,     // DOODLE_SPRITE4
+    16h002c,     // DOODLE_SPRITE3
+    16h003c,     // DOODLE_SPRITE2
+    16h00fb,     // DOODLE_SPRITE1
+    16h00c9,     // DOODLE_SPRITE0
+    16d8,        // MAX_HEIGHT
+    16d3,        // OBSTACLE_WIDTH
+    16d30,       // OBSTACLE_SEPARATION
+    16d3         // MAX_COOLDOWN
+  });
+  
+  // array of all the current values of all memory locations, in order of memory address
+  sig q[64][16];
+  // array of all the `q` inputs of all writeable registers, in order of memory address
+  sig d[64][16];
+  
+  .clk(clk) {
+    .rst(rst) {
+      // all the registers
+      dff game_running_reg[16](#INIT(1));
+      dff tick_period_reg[16](#INIT(511));
+      dff conditional_reg[16](#INIT(1));
+      dff doodle_pos_reg[16];
+      dff doodle_dir_reg[16](#INIT(16hFFFF));
+      dff is_le_reg[16];
+      dff is_ge_reg[16];
+      dff terrain_gen_counter_reg[16];
+      dff cooldown_reg[16];
+      dff input_correct_reg[16];
+      dff qn_reg[3][16](#INIT(48x{1}));
+      dff registers_13to30[18][16];
+    }
+    // pseudo-random number generator, as an LFSR, initialized at some arbitrary number
+    dff lfsr[48](#INIT(48d84821515615470));
+  }
+  
+  var i, reg_index;
+  
+  always {
+    // LFSR wiring
+    lfsr.d[46:0] = lfsr.q[47:1];
+    lfsr.d[48-1] = lfsr.q[48-48] ^ lfsr.q[48-47] ^ lfsr.q[48-21] ^ lfsr.q[48-20];    // using the tap positions 48, 47, 21, 20
+    
+    // output to display module
+    game_running = (game_running_reg.q != 0);
+    tick_period = tick_period_reg.q;
+    question_nums = qn_reg.q;
+    for(i = 3; 0 <= i && i <= 3; i--) {
+      reg_index = 13 + 2*(3-i);
+      terrain[i] = c{registers_13to30.q[reg_index-13], registers_13to30.q[reg_index+1-13]};
+    }
+    for(i = 5; 0 <= i && i <= 5; i--) {
+      reg_index = 21 + (5-i);
+      doodle[i] = registers_13to30.q[reg_index - 13];
+    }
+    score = registers_13to30.q[27-13];
+    
+    // address-to-register mapping (read address)
+    q[0] = game_running_reg.q;
+    q[1] = tick_period_reg.q;
+    q[2] = conditional_reg.q;
+    q[3] = doodle_pos_reg.q;
+    q[4] = doodle_dir_reg.q;
+    q[5] = is_le_reg.q;
+    q[6] = is_ge_reg.q;
+    q[7] = terrain_gen_counter_reg.q;
+    q[8] = cooldown_reg.q;
+    q[9] = input_correct_reg.q;
+    q[12:10] = qn_reg.q;
+    q[30:13] = registers_13to30.q;
+    q[33:31] = {lfsr.q[47:32], lfsr.q[31:16], lfsr.q[15:0]};
+    q[34] = controller_input;
+    q[53:35] = CONSTANTS;
+    
+    // read ports
+    rd1 = q[ra1];
+    rd2 = q[ra2];
+    
+    // write ports
+    d = q;
+    if(wa == 2) {
+      // if writing to the conditional enable register, always allow
+      d[2] = wd;
+    } else if(wa < 33 && conditional_reg.q != 0) {
+      // if writing to other writeable registers, check the conditional enable register first
+      d[wa] = wd;
+    }
+    
+    // address-to-register mapping (write address)
+    game_running_reg.d = d[0];
+    tick_period_reg.d = d[1];
+    conditional_reg.d = d[2];
+    doodle_pos_reg.d = d[3];
+    doodle_dir_reg.d = d[4];
+    is_le_reg.d = d[5];
+    is_ge_reg.d = d[6];
+    terrain_gen_counter_reg.d = d[7];
+    cooldown_reg.d = d[8];
+    input_correct_reg.d = d[9];
+    qn_reg.d = d[12:10];
+    registers_13to30.d = d[30:13];
+  }
+}

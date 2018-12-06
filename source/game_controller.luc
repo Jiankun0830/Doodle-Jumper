@@ -1,0 +1,38 @@
+/*
+   This file describes a simple controller module for the game.
+   The controller contains a 32-bit register, and is controlled by 2 buttons ("<=" and ">=" buttons).
+   When "<=" is pressed, the register's lowest and highest bits should be set;
+   .. when ">=" is pressed, the register's lowest bit should be set, and the highest reset.
+   The controller takes an additional input `clear` which functions similarly to `rst`.
+   .. This signal should be high when the ALU is done updating the game state, thus the input data should be reset.
+*/
+module game_controller (
+    input clk,  // clock
+    input rst,  // reset
+    input le_button,              // signal representing the "<=" button
+    input ge_button,              // signal representing the ">=" button
+    input clear,                  // signal that ALU has just done updating game state, so input can be reset
+    output controller_input[16]   // current value of input, wired out to the memory for the ALU to acces
+  ) {
+
+  .clk(clk) {
+    // conditioners for the input buttons
+    button_conditioner le_conditioner(.in(le_button));
+    button_conditioner ge_conditioner(.in(ge_button));
+    // input data, reset upon either `rst` or `clear` HIGH
+    dff register[16](.rst(rst | clear));
+  }
+  
+  always {
+    // wire to output
+    controller_input = register.q;
+    
+    // handle button press
+    if(le_conditioner.out | ge_conditioner.out) {
+      // set lowest bit to HIGH
+      register.d[0] = 1;
+      // set or reset highest bit depending on which button is pressed
+      register.d[15] = le_conditioner.out | ~ge_conditioner.out;
+    }
+  }
+}

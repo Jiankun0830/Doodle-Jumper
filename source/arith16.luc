@@ -1,0 +1,35 @@
+// This file describes the arithmetic unit used in a 16-bit ALU.
+// This unit consists of an adder-subtractor and a multiplier.
+// Function encoding `alufn`:
+//  - `alufn[0]` is whether to perform subtraction instead of addition
+//  - `alufn[1]` is 0 when addition is used, 1 when multiplication is used
+
+module arith16 (
+    input alufn[4],      // function encoding as described above
+    input a[16],         // ALU `a` input
+    input b[16],         // ALU `b` input
+    output arith[16],    // arithmetic unit output
+    output z,            // `z` output from the adder unit
+    output v,            // `v` output from the adder unit
+    output n             // `n` output from the adder unit
+  ) {
+
+  // instantiate adder and multiplier
+  .a(a), .b(b) {
+    adder16 adder(.subtract(alufn[0]));
+    mult16 multiplier;
+  }
+  
+  always {
+    // mux selecting between adder output and multipier output
+    case(alufn[1]) {
+      0: arith = adder.s;
+      1: arith = multiplier.p;
+      default: arith = 0;
+    }
+    // wire `z`, `v`, `n` directly from adder
+    z = adder.z;
+    v = adder.v;
+    n = adder.n;
+  }
+}

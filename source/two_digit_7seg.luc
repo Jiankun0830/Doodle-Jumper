@@ -1,0 +1,58 @@
+/*
+   This file describes a 4-digit 7-segment display controller that uses only 2 digits.
+   This module is parametrized with the `ACTIVE_LEVEL` parameter to allow for both types of 7-segment displays:
+    - active-low (common anode) displays should use 0 as the parameter
+    - active-high (common cathode) displays should use 1 as the parameter
+   This module takes a binary number as input, and converts it to decimal internally.
+*/
+module two_digit_7seg #(
+    ACTIVE_LEVEL: ACTIVE_LEVEL == 0 || ACTIVE_LEVEL == 1    // whether display is active-low (common anode) or active-high (common cathod)
+  ) (
+    input clk,  // clock
+    input rst,  // reset
+    input number[7],      // number to be displayed, in binary
+    output segments[8],   // segments signal
+    output enable[4]      // digit enable / sel signal
+  ) {
+  
+  // common electrode's active level is inverse of segment active level
+  const COMMON_ELECTRODE_LEVEL = ~ACTIVE_LEVEL;
+  
+  // ROM containing the segment signals for each of 10 possible digits
+  // .. as well as empty (no display) signals for invalid digits
+  const FONT = $reverse({
+      7b0111111,  // 0
+      7b0000110,  // 1
+      7b1011011,  // 2
+      7b1001111,  // 3
+      7b1100110,  // 4
+      7b1101101,  // 5
+      7b1111101,  // 6
+      7b0000111,  // 7
+      7b1111111,  // 8
+      7b1101111,  // 9
+      7b0000000,  // none
+      7b0000000,  // none
+      7b0000000,  // none
+      7b0000000,  // none
+      7b0000000,  // none
+      7b0000000   // none
+  });
+
+  // digit multiplexing phase counter
+  counter phase(#SIZE(1), #DIV(18), .clk(clk), .rst(rst));
+  
+  // binary-to-decimal decoder
+  bin_to_dec decoder(#DIGITS(2), .value(number));
+  
+  always {
+    // segments signal
+    segments = FONT[decoder.digits[phase.value]] ^ 7x{COMMON_ELECTRODE_LEVEL};
+    // decimal point signal is always inactive
+    segments[7] = ~ACTIVE_LEVEL;
+    // most common electrodes are inactive
+    enable = 4x{~COMMON_ELECTRODE_LEVEL};
+    // the common electrode selected by the phase counter should be active
+    enable[phase.value] = COMMON_ELECTRODE_LEVEL;
+  }
+}

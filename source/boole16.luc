@@ -1,0 +1,32 @@
+// This file describes the bitwise boolean unit used by a 16-bit ALU.
+// Function encoding `alufn`: this is designed to be the bits in the output column of a 2-input truth table.
+// ..  e.g. `alufn = b1000` gives an AND operation, and NAND would thus simply be `alufn = b0111`.
+// ..  Note that bits from `a` are used as the first input column of the truth table, and bits from `b` the second column.
+module boole16 (
+    input alufn[4],    // function encoding as described above
+    input a[16],       // ALU `a` input
+    input b[16],       // ALU `b` input
+    output boole[16]   // bitwise boolean unit output
+  ) {
+  
+  always {
+    // due to `alufs`'s design, its corresponding boolean operation can be done through a mux
+    // repeat this mux 16 times, once for each pair of bits
+    boole[15] = alufn[c{b[15], a[15]}];
+    boole[14] = alufn[c{b[14], a[14]}];
+    boole[13] = alufn[c{b[13], a[13]}];
+    boole[12] = alufn[c{b[12], a[12]}];
+    boole[11] = alufn[c{b[11], a[11]}];
+    boole[10] = alufn[c{b[10], a[10]}];
+    boole[9] = alufn[c{b[9], a[9]}];
+    boole[8] = alufn[c{b[8], a[8]}];
+    boole[7] = alufn[c{b[7], a[7]}];
+    boole[6] = alufn[c{b[6], a[6]}];
+    boole[5] = alufn[c{b[5], a[5]}];
+    boole[4] = alufn[c{b[4], a[4]}];
+    boole[3] = alufn[c{b[3], a[3]}];
+    boole[2] = alufn[c{b[2], a[2]}];
+    boole[1] = alufn[c{b[1], a[1]}];
+    boole[0] = alufn[c{b[0], a[0]}];
+  }
+}

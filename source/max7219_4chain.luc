@@ -1,0 +1,108 @@
+/* 
+   This file describes an SPI controller module for a single daisy chain of 4 MAX7219 display drivers.
+   This module saves the target register address and data before a transmission starts, triggered by the `start` signal.
+*/
+module max7219_4chain (
+    input clk,  // clock
+    input rst,  // reset
+    // transmission request ports
+    input start,       // transmission start request
+    input addr_in[8],  // address input, the address of the MAX7219 registers which data should be stored into
+    input din[4][8],   // data input, 4 bytes to be stored in the 4 specified MAX7219 registers
+    output busy,       // whether module is busy / not ready for new transmission
+    // SPI signal output
+    output mosi,       // SPI MOSI signal
+    output ss,         // SPI SS signal (active low)
+    output sclk        // SPI SCLK signal
+  ) {
+  
+//  sig graceful_rst;
+
+  .clk (clk), .rst(rst) {
+    // operational state of the module
+    fsm state(#INIT(IDLE)) = {IDLE, SEND_ADDR, SEND_DATA};
+    // SPI master module, at 10 MHz
+    spi_master spi(#CLK_DIV(8), .miso(0));
+    // register to hold `addr_in`
+    dff addr[8];
+    // register to hold `din`
+    dff data[4][8];
+    // register to hold whether the module is transmitting data; output equivalent to `ss`
+    dff load_state(#INIT(1));
+    
+  }
+//  dff rst_request(.clk(clk));
+  
+  
+  // counter to count number of clock cycles in SCLK, i.e. number of bits transmitted
+  // .. higher 2 bits specify which of the 4 MAX7219 modules to send to, lower 4 bits count how many in the 16-bit block (addr + data) is being transmitted
+  counter count(#SIZE(6), .clk(spi.sck));
+
+  always  {
+    // wire these to output
+    sclk = spi.sck;
+    busy = state.q != state.IDLE;
+    ss = load_state.q;
+
+    // defaults
+    count.rst = 0;
+    spi.data_in = 8b0;
+    spi.start = 0;
+    mosi = 0;
+    
+/*    if(rst) {
+      rst_request.d = 1;
+    }*/
+    
+    case (state.q) {
+      
+      state.IDLE:
+        // module is idle
+        load_state.d = 1;    // next SS usually inactive
+/*        if (rst_request.q) {
+          // gracefully reset after all transmissions have ended
+          graceful_rst = 1;
+          rst_request.d = 0;
+          busy = 1;
+        }*/
+        if (start) {
+          // save transmission request input
+          addr.d = addr_in;
+          data.d = din;
+          count.rst = 1;
+          // begin transmission
+          load_state.d = 0;  // next SS becomes active
+          state.d = state.SEND_ADDR;
+        }
+        
+      state.SEND_ADDR:
+        // module is sending register address (higher 8 bits of each MAX7218 in the chain)
+        spi.start = 1;
+        spi.data_in = addr.q;
+        mosi = spi.mosi;
+        if (count.value[3:0] == 8){    // use 8 instead of 7, as counter increments before the current SCLK pulse ends
+          // when current 16-bit block is has 8 bits transmitted, start sending data
+          state.d = state.SEND_DATA;
+        }
+        
+      state.SEND_DATA:
+        // module is sending data (lower 8 bits of each MAX7218 in the chain)
+        spi.start = 1;
+        spi.data_in = data.q[count.value[5:4]];  // select data corresponding to the current MAX7219 module
+        mosi = spi.mosi;
+        if (count.value[3:0] == 0){
+          // when current 16-bit block is fully transmitted
+          if(count.value[5:4] == b00) {  // use b00 instead of b11, as counter increments before the current SCLK pulse ends
+            // if all 4 16-bit blocks are done:
+            load_state.d = 1;       // end transmission / latch the data by setting SS to HIGH
+            count.rst = 1;          // force reset counter just to be sure
+            state.d = state.IDLE;   // transmission complete
+          } else {
+            // if not all 16-bit blocks are sent yet, send the address of the next block
+            state.d = state.SEND_ADDR;
+          }
+        }
+    }
+    
+  }
+}

@@ -1,0 +1,49 @@
+// This file describes a 16-bit ALU.
+// Function encoding `alufn`: top 2 bits `alufn[5:4]` represent which unit to use
+//  - `00`: arithmetic unit
+//  - `01`: bitwise boolean unit
+//  - `10`: shifter unit
+//  - `11`: comparator unit
+// The remaining 4 bits `alufn[3:0]` are decoded by said units.
+
+module alu16 (
+    input alufn[6],    // function encoding as described above
+    input a[16],       // 16-bit `a` input
+    input b[16],       // 16-bit `b` input
+    output alu[16],    // 16-bit ALU output
+    output z,          // `z` output from the arithmetic unit
+    output v,          // `v` output from the arithmetic unit
+    output n           // `n` output from the arithmetic unit
+  ) {
+
+  // instantiate all 4 units: arithmetic unit, shifter, comparator, bitwise boolean unit
+  .alufn(alufn[3:0]) {
+    .a(a) {
+  
+      shift16 shifter(.b(b[4:0]));
+      
+      .b(b) {
+        arith16 arith_unit;
+        boole16 boolean;
+      }
+    }
+  
+    compare16 comparator(.z(arith_unit.z), .v(arith_unit.v), .n(arith_unit.n));
+  }
+    
+  always {
+    // wire `z`, `v`, `n` directly from arithmetic unit
+    z = arith_unit.z;
+    v = arith_unit.v;
+    n = arith_unit.n;
+    // mux to select among the outputs of the 4 units
+    // ..  this is using the top 2 bits of `alufn`, which are designed to represent the unit used
+    case(alufn[5:4]) {
+      b00: alu = arith_unit.arith;
+      b01: alu = boolean.boole;
+      b10: alu = shifter.shift;
+      b11: alu = comparator.cmp;
+      default: alu = 16b0;
+    }
+  }
+}

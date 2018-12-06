@@ -1,0 +1,99 @@
+/*
+   This file describes the overall FPGA design of our game prototype.
+   It consists of the following modules:
+    - a looping instruction counter, to select the instruction to be executed
+    - an instruction ROM containing instructions to be executed by the data path
+    - 16-bit ALU
+    - memory module
+    - game controller module keeping track of user input
+    - display module
+*/
+module mojo_top (
+    input clk,              // 50MHz clock
+    input rst_n,            // reset button (active low)
+    output led [8],         // 8 user controllable LEDs
+    input cclk,             // configuration clock, AVR ready when high
+    output spi_miso,        // AVR SPI MISO
+    input spi_ss,           // AVR SPI Slave Select
+    input spi_mosi,         // AVR SPI MOSI
+    input spi_sck,          // AVR SPI Clock
+    output spi_channel [4], // AVR general purpose pins (used by default to select ADC channel)
+    input avr_tx,           // AVR TX (FPGA RX)
+    output avr_rx,          // AVR RX (FPGA TX)
+    input avr_rx_busy,      // AVR RX buffer full
+    input le_button,        // signal representing the "<=" button
+    input ge_button,        // signal representing the ">=" button
+    input start_game,       // same function as `~rst_n` signal, but on a different button
+    output led_matrix_mosi[2],  // MOSI signal for the two LED matrices
+    output led_matrix_ss[2],    // SS signal for the two LED matrices
+    output led_matrix_sclk[2],  // SCLK signal for the two LED matrices
+    output qn_segs[3][8],       // segment signals for the 3 question 7-segs
+    output qn_sel[3][4],        // sel signal for the 3 question 7-segs
+    output score_segs[8],       // segment signals for the score display 7-seg
+    output score_sel[4]         // sel signals for the score display 7-seg
+  ) {
+  
+  sig rst;                  // reset signal
+  
+  // instruction ROM
+  instruction_rom instruction_rom;
+  // ALU
+  alu16 alu(.alufn(instruction_rom.alufn));
+  
+  .clk(clk) {
+    // The reset conditioner is used to synchronize the reset signal to the FPGA
+    // clock. This ensures the entire FPGA comes out of reset at the same time.
+    reset_conditioner reset_cond;
+    // detect when the ALU is done executing instructions
+    edge_detector instruction_end(#FALL(0), .in(instruction_rom.invalid));
+    
+    .rst(rst) {
+      // game controller module
+      game_controller controller(.le_button(le_button), .ge_button(ge_button), .clear(instruction_end.out));
+      // memory module
+      memory memory(
+        .ra1(instruction_rom.a_addr), 
+        .ra2(instruction_rom.b_addr),
+        .wa(instruction_rom.c_addr),
+        .wd(alu.alu),
+        .controller_input(controller.controller_input)
+      );
+      // looping instruction counter
+      instruction_counter instruction_counter(.game_running(memory.game_running), .max(c{memory.tick_period, 16b0}));
+      // display module
+      display display(
+        .question_nums(memory.question_nums),
+        .terrain(memory.terrain),
+        .doodle(memory.doodle),
+        .score(memory.score)
+      );      
+    }
+  }
+  
+
+  always {
+    reset_cond.in = (~rst_n | start_game); // use both `~rst_n` and `start_game` as reset signal
+    rst = reset_cond.out;   // conditioned reset
+    
+    led = 8h00;             // turn LEDs off
+    spi_miso = bz;          // not using SPI
+    spi_channel = bzzzz;    // not using flags
+    avr_rx = bz;            // not using serial port
+    
+    // ALU wiring
+    alu.a = memory.rd1;
+    alu.b = memory.rd2;
+    
+    // instruction ROM wiring
+    instruction_rom.select = instruction_counter.value;
+    
+    // display wiring
+    led_matrix_mosi = display.mosi;
+    led_matrix_ss = display.ss;
+    led_matrix_sclk = display.sclk;
+    qn_segs = display.qn_segs;
+    qn_sel = display.qn_enable;
+    score_segs = display.score_segs;
+    score_sel = display.score_enable;
+  }
+}

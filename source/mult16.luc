@@ -1,0 +1,12 @@
+// This file describes a multiplier in the arithmetic unit of a 16-bit ALU.
+
+module mult16 (
+    input a[16],    // ALU input `a`
+    input b[16],    // ALU input `b`
+    output p[16]    // product output
+  ) {
+
+  always {
+    p = a*b;
+  }
+}

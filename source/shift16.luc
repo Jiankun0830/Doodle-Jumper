@@ -1,0 +1,28 @@
+// This file describes a shifter unit used in a 16-bit ALU.
+// Function encoding `alufn`:
+//  - `alufn[0]`: 0 to shift left, 1 to shift right
+//  - `alufn[1]`: whether to use arithmetic right shift instead of logical right shift
+//  - `alufn[2]`: whether to rotate rather than shift
+
+module shift16 (
+    input alufn[4],    // function encoding as described above
+    input a[16],       // ALU `a` input; bits to be shifted
+    input b[5],        // lowest 5 bits of ALU `b` input; number of bits to shift by
+    output shift[16]   // shifter unit output
+  ) {
+    
+  // instantiate left and right shifters
+  .a(a), .b(b), .rotate(alufn[2]) {
+    lshift16 lshifter;
+    rshift16 rshifter(.arithmetic(alufn[1]));
+  }
+  
+  always {
+    // mux to select between left and right shifter outputs
+    case(alufn[0]) {
+      0: shift = lshifter.shift;
+      1: shift = rshifter.shift;
+      default: shift = 16b0;
+    }
+  }
+}

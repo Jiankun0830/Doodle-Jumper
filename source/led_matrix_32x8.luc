@@ -1,0 +1,137 @@
+/* 
+   This file describes an SPI controller for a row of 4 8x8 LED matrices controlled by 4 daisy chained MAX7219 display drivers.
+   This file handles initialization and the data to send. The low level logic for sending data is handled by the `max7219_4chain` module. 
+   The module takes in a 8x32 2D array as input, and displays said input on the 32x8 LED matrix; 
+   .. the indices decrease from top to bottom and from left to right (i.e. bitmap[0][0] corresponds to the bottom right LED);
+   .. 0s are unlit and 1s are lit.
+*/
+
+module led_matrix_32x8 (
+    input clk,  // clock
+    input rst,  // reset
+    // Input bitmap as 8 rows of 32 bits
+    input bitmap[8][32],
+    // SPI signal output
+    output mosi,       // SPI MOSI signal
+    output ss,         // SPI SS signal (active low)
+    output sclk        // SPI SCLK signal
+  ) {
+  
+  .clk(clk), .rst(rst) {
+    // counter for refreshing the display at regular intervals
+    counter refresh_counter(#SIZE(20));
+    // counter for keeping track of which LED row to refresh
+    dff row_counter[3];
+    // operational state of the module
+    fsm state = {FLUSH_BUFFER, INITIALIZE_DECODE, INITIALIZE_INTENSITY, INITIALIZE_DIGITS, INITIALIZE_OPERATION, INITIALIZE_TEST_MODE, REFRESH, IDLE};
+    // SPI controller for the 4 daisy chained MAX7219 drivers
+    max7219_4chain spi_controller;
+  }
+  // detect when SPI controller becomes free
+  edge_detector done(#RISE(0), #FALL(1), .clk(clk), .in(spi_controller.busy));
+  
+  always {
+    // wire MAX7219 chain controller to output
+    mosi = spi_controller.mosi;
+    ss = spi_controller.ss;
+    sclk = spi_controller.sclk;
+    
+    // defaults
+    spi_controller.start = 0;
+    spi_controller.addr_in = 0;
+    spi_controller.din = 4x{{8b0}};
+    
+    case(state.q) {
+      state.FLUSH_BUFFER:
+        // set SS to HIGH to clear all data in the buffer
+        ss = 1;
+        if(~spi_controller.busy) {
+          // go to next state when done
+          state.d = state.INITIALIZE_DECODE;
+        }
+        
+      state.INITIALIZE_DECODE:
+        // wait for the SPI controller to be free
+        // then set decode mode to none
+        if(~done.out) {
+          spi_controller.start = 1;
+          spi_controller.addr_in = 8h09;
+          spi_controller.din = 4x{{8h00}};
+        } else {
+          // go to next state when done
+          state.d = state.INITIALIZE_INTENSITY;
+        }
+
+      state.INITIALIZE_INTENSITY:
+        // wait for the SPI controller to be free
+        // then set intensity of the LEDs
+        if(~done.out) {
+          spi_controller.start = 1;
+          spi_controller.addr_in = 8h0A;
+          spi_controller.din = 4x{{8h00}};
+        } else {
+          // go to next state when done
+          state.d = state.INITIALIZE_DIGITS;
+        }
+        
+      state.INITIALIZE_DIGITS:
+        // wait for the SPI controller to be free
+        // then set the MAX7219 controllers to display all rows
+        if(~done.out) {
+          spi_controller.start = 1;
+          spi_controller.addr_in = h0B;
+          spi_controller.din = 4x{{8h07}};
+        } else {
+          // go to next state when done
+          state.d = state.INITIALIZE_OPERATION;
+        }
+        
+      state.INITIALIZE_OPERATION:
+        // wait for the SPI controller to be free
+        // then set normal operation mode (as opposed to shutdown mode)
+        if(~done.out) {
+          spi_controller.start = 1;
+          spi_controller.addr_in = 8h0C;
+          spi_controller.din = 4x{{8h01}};
+        } else {
+          // go to next state when done
+          state.d = state.INITIALIZE_TEST_MODE;
+        }
+      
+      state.INITIALIZE_TEST_MODE:
+        // wait for the SPI controller to be free
+        // then set test mode to off
+        if(~done.out) {
+          spi_controller.start = 1;
+          spi_controller.addr_in = 8h0F;
+          spi_controller.din = 4x{{8h00}};
+        } else {
+          // go to next state when done
+          state.d = state.REFRESH;
+        }
+        
+      state.REFRESH:
+        // send data to refresh the bitmap displayed by the LED matrix
+        spi_controller.start = 1;
+        spi_controller.addr_in = 8 - row_counter.q;    // simple mapping from row count to register address
+        // reversed data order to create the effect of higher bits always showing on the left side of the display
+        // (31..24, 23..16, 15..8, 7..0 rather than 7..0, 15..8, 23..16, 31..24)
+        spi_controller.din = {bitmap[row_counter.q][7:0], bitmap[row_counter.q][15:8], bitmap[row_counter.q][23:16], bitmap[row_counter.q][31:24]};
+        if(row_counter.q == 15) {
+          // if sending the last row, enter idle state
+          state.d = state.IDLE;
+        } else if(~spi_controller.busy) {
+          // if there are more rows to send, send the next row when controller is ready
+          row_counter.d = row_counter.q + 1;
+        }
+        
+      state.IDLE:
+        // wait for the next refresh cycle
+        if(refresh_counter.value == 20b0) {
+          // refresh the display
+          row_counter.d = 0;  // set it back to 0 just to be sure
+          state.d = state.REFRESH;
+        }
+    }
+  }
+}

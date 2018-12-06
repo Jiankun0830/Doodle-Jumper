@@ -1,0 +1,64 @@
+// This file describes a left shifter in the shifter unit of a 16-bit ALU.
+
+module lshift16 (
+    input a[16],        // ALU `a` input; bits to be shifted
+    input b[5],         // lowest 5 bits of ALU `b` input; number of bits to shift by
+    input rotate,       // whether to rotate rather than shift
+    output shift[16]    // left shifter output
+  ) {
+
+  // intermediate values of shifted input
+  sig after16[16];
+  sig after8[16];
+  sig after4[16];
+  sig after2[16];
+  // bits to fill in when shifting
+  sig fill8[8];
+  sig fill4[4];
+  sig fill2[2];
+  sig fill1[1];
+  
+  always {
+    // shift by 16 bits
+    case({b[4], rotate}) {
+      {1, 0}: after16 = 16b0;
+      default: after16 = a;
+    }
+    // shift by 8 bits
+    case(rotate) {
+      1: fill8 = after16[15-:8];
+      default: fill8 = 8b0;
+    }
+    case(b[3]) {
+      1: after8 = c{after16[0+:8], fill8};
+      default: after8 = after16;
+    }
+    // shift by 4 bits
+    case(rotate) {
+      1: fill4 = after8[15-:4];
+      default: fill4 = 4b0;
+    }
+    case(b[2]) {
+      1: after4 = c{after8[0+:12], fill4};
+      default: after4 = after8;
+    }
+    // shift by 2 bits
+    case(rotate) {
+      1: fill2 = after4[15-:2];
+      default: fill2 = 2b0;
+    }
+    case(b[1]) {
+      1: after2 = c{after4[0+:14], fill2};
+      default: after2 = after4;
+    }
+    // shift by 1 bit
+    case(rotate) {
+      1: fill1 = after2[15-:1];
+      default: fill1 = 1b0;
+    }
+    case(b[0]) {
+      1: shift = c{after2[0+:15], fill1};
+      default: shift = after2;
+    }
+  }
+}

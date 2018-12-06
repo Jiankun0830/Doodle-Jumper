@@ -1,0 +1,43 @@
+// This file describes a 16-bit adder-subtractor.
+// Addition calculates `a+b`, and subtraction calculates `a-b`.
+// This adder also outputs three signal variables for use in a comparator:
+//  - `z`, whether sum is 0
+//  - `v`, whether there is overflow in the operation
+//  - `n`, whether sum is negative
+
+module adder16 (
+    input a[16],      // input `a`
+    input b[16],      // input `b`
+    input subtract,   // whether to subtract rather than add
+    output s[16],     // output sum
+    output z,         // output `z`
+    output v,         // output `v`
+    output n          // output `n`
+  ) {
+  
+  // pre-output sum signal, can be read unlike `s`
+  sig sum[16];
+  // operands for the internal addition
+  sig xa[16];
+  sig xb[16];
+
+  always {
+    // `a` is directly used as operand
+    xa = a;
+    // conditionally use the negative of `b` as operand in subtract mode
+    case(subtract) {
+      1: xb = -b;
+      default: xb = b;
+    }
+    // calculate sum
+    sum = xa + xb;
+    // output the sum as `s`
+    s = sum;
+    // output `z`: whether the sum is 0
+    z = ~(|sum);
+    // output `n`: whether the sum is negative
+    n = sum[15];
+    // output `v`: whether overflow has occurred
+    v = (xa[15] & xb[15] & ~sum[15]) + (~xa[15] & ~xb[15] & sum[15]);
+  }    
+}

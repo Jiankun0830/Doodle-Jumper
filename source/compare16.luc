@@ -1,0 +1,34 @@
+// This file describes a comparator unit in a 16-bit ALU.
+// Function encoding `alufn`:
+//  - alufn[0] is always 1, 
+//  - alufn[1] means whether to output 1 when `a == b`
+//  - alufn[2] means whether to output 1 when `a < b`
+//  - alufn[3] means whether to negate the output
+// e.g. `alufn = b1111` would output 1 if `a < b` or `a == b`, so it is `a <= b`, but it is then negated, so overall it is `a > b`
+
+module compare16 (
+    input alufn[4],    // function encoding as described above
+    input z,           // whether `a - b == 0`; from adder unit
+    input v,           // whether `a - b` causes an overflow
+    input n,           // whether `a - b` is negative
+    output cmp[16]     // comparator output
+  ) {
+
+  sig lt;              // whether to output 1 due to `a < b` 
+  sig eq;              // whether to output 1 due to `a == b`
+  sig before_negation; // whether to output 1 due to either reason above
+  
+  always {
+    // set higher output bits to 0
+    cmp = 16b0;
+    // determine pre-negation output
+    eq = z & alufn[1];
+    lt = (n ^ v) & alufn[2];
+    before_negation = eq | lt;
+    // negate if `alufn[3]` is 1
+    case(alufn[3]) {
+      1: cmp[0] = ~before_negation;
+      default: cmp[0] = before_negation;
+    }
+  }
+}

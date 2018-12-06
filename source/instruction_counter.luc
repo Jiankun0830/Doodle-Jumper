@@ -1,0 +1,36 @@
+/*
+   This file describes a looping instruction counter that has a variable loop period.
+   The output of this instruction counter is used to select the line of instruction in the
+   .. instruction ROM to be used to control the ALU register read / writes.
+   The counter wraps back to 0 when it reaches a variable maximum value, which is
+   .. wired in from a register in the memory. This register can be written by the ALU
+   .. to change the period of a game tick, thus changing the speed of the game.
+   The counter only counts when the `game_running` signal, also wired in from the memory,
+   .. is HIGH. This allows the ALU to stop the game.
+*/
+module instruction_counter (
+    input clk,  // clock
+    input rst,  // reset
+    input game_running,  // whether the counter should keep counting / whether the game is running
+    input max[32],       // maximum value to count up to before wrapping back to 0
+    output value[32]     // current value of the counter, for selecting an instruction in the instruction ROM
+  ) {
+  
+  dff counter[32](.clk(clk), .rst(rst));
+
+  always {
+    // wire to output
+    value = counter.q;
+    // counting logic
+    if(game_running == 1) {
+      // if game is running, keep counting
+      if(counter.q < max) {
+        // normally, increment by 1
+        counter.d = counter.q + 1;
+      } else {
+        // when reached max, wrap back to 0
+        counter.d = 0;
+      }
+    }
+  }
+}

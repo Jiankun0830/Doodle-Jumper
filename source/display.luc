@@ -1,0 +1,70 @@
+/*
+   This file describes the display logic in our game.
+   It includes 2 32x8 LED matrix SPI modules, and 4 4-digit 7-segment displays (displaying only 2 digits).
+   It takes as input the game terrain and position-offset Doodle sprite, both as 2-dimensional arrays,
+   .. and superimposes the two images using bitwise OR, to produce the final render, which
+   .. is passed to the LED matrices as display data.
+*/
+module display (
+    input clk,  // clock
+    input rst,  // reset
+    // input from the memory's display port
+    input question_nums[3][16],  // the 3 numbers that specify a question, in binary
+    input terrain[4][32],        // the game terrain as a 2-D array
+    input doodle[6][16],         // the position-offset Doodle sprite, as a 2-D array
+    input score[16],             // the score, in binary
+    // LED matrix SPI signal output, for 2 LED matrices
+    output mosi[2],
+    output ss[2],
+    output sclk[2],
+    // 7-segment display signals
+    output qn_segs[3][8],        // the 7-seg segment voltage levels, for 3 question-specifying numbers
+    output qn_enable[3][4],      // the 7-seg digit select signals, for 3 question-specifying numbers
+    output score_segs[8],        // the 7-seg segment voltage levels, for the score display
+    output score_enable[4]       // the 7-seg digit select signals, for the score display
+  ) {
+  
+  // the final bitmap to be displayed on the LED matrices
+  sig render[16][32];
+  
+  .clk(clk), .rst(rst) {
+    // LED matrices
+    led_matrix_32x8 led_matrix1(.bitmap(render[15:8]));
+    led_matrix_32x8 led_matrix0(.bitmap(render[7:0]));
+    // question displays
+    two_digit_7seg sevseg_qn2(#ACTIVE_LEVEL(0), .number(question_nums[2][6:0]));
+    two_digit_7seg sevseg_qn1(#ACTIVE_LEVEL(0), .number(question_nums[1][6:0]));
+    two_digit_7seg sevseg_qn0(#ACTIVE_LEVEL(0), .number(question_nums[0][6:0]));
+    // score display
+    two_digit_7seg sevseg_score(#ACTIVE_LEVEL(1), .number(score[6:0]));
+  }
+  
+  // for-loop variable
+  var i;
+  
+  always {
+    // render the bitmap to be displayed on the LED matrices:
+    // .. render rows on which obstacles could appear
+    render[3:0] = terrain;
+    // .. render columns on which Doodle could appear
+    for(i = 15; 15 >= i && i >= 4; i--) {
+      render[i][31-:6] = c{doodle[5][i], doodle[4][i], doodle[3][i], doodle[2][i], doodle[1][i], doodle[0][i]};
+    }
+    // .. render the intersection of the above two areas
+    for(i = 3; 3 >= i && i >= 0; i--) {
+      render[i][31-:6] = c{doodle[5][i], doodle[4][i], doodle[3][i], doodle[2][i], doodle[1][i], doodle[0][i]} | terrain[i][31-:6];
+    }
+    
+    // wire out the LED matrix controllers' output
+    mosi = c{led_matrix1.mosi, led_matrix0.mosi};
+    ss = c{led_matrix1.ss, led_matrix0.ss};
+    sclk = c{led_matrix1.sclk, led_matrix0.sclk};
+    
+    // wire out the 7-seg signals
+    qn_segs = {sevseg_qn2.segments, sevseg_qn1.segments, sevseg_qn0.segments};
+    qn_enable = {sevseg_qn2.enable, sevseg_qn1.enable, sevseg_qn0.enable};
+    score_segs = sevseg_score.segments;
+    score_enable = sevseg_score.enable;
+  }
+  
+}

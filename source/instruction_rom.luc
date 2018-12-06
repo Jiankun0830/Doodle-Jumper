@@ -1,0 +1,125 @@
+/*
+   This file describes an instruction ROM containing the instructions needed to run the game.
+   The instructions are "assembled" from a simple imperative format using a Python script we wrote.
+   This module takes in a select signal from the instruction counter. If the select signal is out of range,
+   .. a placeholder instruction that does nothing is output, and the `invalid` output would be HIGH.
+   The `invalid`'s rising edge is useful for signalling the controller module to clear the input register.
+*/
+module instruction_rom (
+    input select[32],    // which instruction to execute
+    output alufn[6],     // ALUFN output
+    output a_addr[6],    // ALU `a` input read address
+    output b_addr[6],    // ALU `b` input read address
+    output c_addr[6],    // ALU output write address
+    output invalid       // whether `select` points to an instrction; this signal's rising edge is 
+                         // .. useful for signalling the controller module to clear the input register
+  ) {
+  
+  // ROM size to check whether `select` is valid
+  const ROM_SIZE = 84;
+  // instruction ROM "assembled" by our Python script; the format is {alufn, read address 1, read address 2, write address}
+  const ROM = {
+    {b000000, b100100, b100011, b000010},
+    {b000000, b100011, b100011, b000000},
+    {b110011, b011100, b101000, b000010},
+    {b000000, b011011, b100100, b011100},
+    {b000000, b100100, b100011, b000010},
+    {b000000, b100011, b100011, b000000},
+    {b011000, b000010, b011101, b000010},
+    {b111011, b011100, b100011, b000010},
+    {b110101, b000011, b100101, b011101},
+    {b011000, b010011, b101011, b011100},
+    {b100000, b110001, b000011, b011010},
+    {b100000, b110000, b000011, b011001},
+    {b100000, b101111, b000011, b011000},
+    {b100000, b101110, b000011, b010111},
+    {b100000, b101101, b000011, b010110},
+    {b100000, b101100, b000011, b010101},
+    {b000000, b100100, b100011, b000010},
+    {b000000, b000011, b000100, b000011},
+    {b010110, b000010, b100100, b000010},
+    {b011110, b011101, b011110, b000010},
+    {b000001, b110010, b100100, b000011},
+    {b000001, b100011, b100100, b000100},
+    {b000000, b011110, b100011, b000010},
+    {b000000, b011011, b100100, b011011},
+    {b000000, b100100, b100011, b000011},
+    {b000000, b100100, b100011, b000100},
+    {b011000, b011101, b001001, b000010},
+    {b110011, b000011, b110010, b011110},
+    {b110011, b000011, b100011, b011101},
+    {b000000, b100100, b100011, b000010},
+    {b000000, b100011, b100011, b000111},
+    {b110011, b000111, b110100, b000010},
+    {b000000, b000111, b100100, b000111},
+    {b000000, b100100, b100011, b000010},
+    {b011110, b010000, b100100, b010000},
+    {b011110, b010010, b100100, b010010},
+    {b011110, b010100, b100100, b010100},
+    {b110101, b000111, b110011, b000010},
+    {b011110, b001111, b011100, b001111},
+    {b100000, b001111, b100100, b001111},
+    {b100000, b010000, b100100, b010000},
+    {b100001, b011100, b100111, b011100},
+    {b011000, b010000, b101001, b011100},
+    {b011110, b010001, b011100, b010001},
+    {b100000, b010001, b100100, b010001},
+    {b100000, b010010, b100100, b010010},
+    {b100001, b011100, b100111, b011100},
+    {b011000, b010010, b101001, b011100},
+    {b011110, b010011, b011100, b010011},
+    {b100000, b010011, b100100, b010011},
+    {b100000, b010100, b100100, b010100},
+    {b100001, b011100, b100111, b011100},
+    {b011000, b010100, b101001, b011100},
+    {b000000, b100100, b100011, b000010},
+    {b111101, b011100, b001100, b000110},
+    {b110111, b011100, b001100, b000101},
+    {b000000, b001010, b001011, b011100},
+    {b100001, b011110, b100100, b001010},
+    {b100001, b011101, b100100, b001011},
+    {b100001, b011100, b100110, b001100},
+    {b100001, b011101, b100110, b011101},
+    {b100001, b011110, b100110, b011110},
+    {b000010, b011110, b101000, b011110},
+    {b000010, b011101, b101000, b011101},
+    {b000010, b011100, b101000, b011100},
+    {b011000, b011110, b101010, b011110},
+    {b011000, b011101, b101010, b011101},
+    {b011000, b011100, b101010, b011100},
+    {b000000, b100001, b100011, b011110},
+    {b000000, b100000, b100011, b011101},
+    {b000000, b011111, b100011, b011100},
+    {b011110, b011100, b011101, b000010},
+    {b110101, b001100, b100011, b011101},
+    {b011000, b011100, b011101, b011100},
+    {b111011, b100010, b100011, b011101},
+    {b110011, b000011, b100011, b011100},
+    {b011110, b011100, b011101, b001001},
+    {b011000, b011101, b000110, b011101},
+    {b111111, b100010, b100011, b011101},
+    {b011000, b011100, b000101, b011100},
+    {b110101, b100010, b100011, b011100},
+    {b000001, b000001, b011100, b000001},
+    {b100001, b011100, b100100, b011100},
+    {b100001, b000001, b100110, b011100}
+  };
+
+  always {
+    if(select < ROM_SIZE) {
+      // if `select` is valid, wire out corresponding output from the ROM
+      alufn = ROM[select][3];
+      a_addr = ROM[select][2];
+      b_addr = ROM[select][1];
+      c_addr = ROM[select][0];
+      invalid = 0;
+    } else {
+      // if `select` is invalid, wire out an instruction that does nothing
+      alufn = 0;
+      a_addr = 63;
+      b_addr = 63;
+      c_addr = 63;
+      invalid = 1;
+    }
+  }
+}
