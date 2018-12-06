@@ -25,5 +25,12 @@ ALUFN  | Operation | Type    | Description
 111111 | CMPGT     | CMP     | compare if A > B
 
 
+Electronic Design
+=================
+![Alt text](https://github.com/Jiankun0830/Doodle-Jumper/master/Electronic_design.jpeg)
+
+
+
+
 
 
