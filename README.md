@@ -5,7 +5,7 @@ The objective was to direct a main character, named "Doodle", who moves continuo
 Arithmetic Logic Unit
 ======================
 
-Our game make use of the following ALU functions, including three dunctions added by ourselves.
+Our game make use of the following ALU functions, including three functions added by ourselves.
 
 ALUFN  | Operation | Type    | Description
 ------ | --------- | ------- | ------------------
