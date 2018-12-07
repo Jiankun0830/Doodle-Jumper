@@ -90,7 +90,7 @@ module memory (
     // output to display module
     game_running = (game_running_reg.q != 0);
     tick_period = tick_period_reg.q;
-    question_nums = qn_reg.q;
+    question_nums = {qn_reg.q[0], qn_reg.q[1], qn_reg.q[2]};    // the first qn_reg contains qn2, and the last qn_reg contains qn0, so reverse order
     for(i = 3; 0 <= i && i <= 3; i--) {
       reg_index = 13 + 2*(3-i);
       terrain[i] = c{registers_13to30.q[reg_index-13], registers_13to30.q[reg_index+1-13]};
